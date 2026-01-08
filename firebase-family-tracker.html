@@ -1,434 +1,142 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>家族在宅管理</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-    </style>
+<meta charset="UTF-8">
+<title>🏠 Family Home Tracker</title>
+<style>
+body { font-family: system-ui; background:#f3f4f6; margin:0; padding:20px;}
+h1 { text-align:center; }
+.card { background:white; border-radius:12px; padding:16px; margin-bottom:16px; box-shadow:0 2px 6px rgba(0,0,0,.1);}
+.member { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #eee;}
+.home { color:green; font-weight:bold; }
+.out { color:#999; }
+input,button { padding:8px; border-radius:8px; border:1px solid #ccc;}
+button { background:#2563eb; color:white; border:none; cursor:pointer;}
+</style>
 </head>
-<body class="bg-gradient-to-br from-blue-50 to-green-50 min-h-screen">
-    <div id="app" class="p-4 max-w-4xl mx-auto">
-        <div class="bg-white rounded-xl shadow-lg p-6 mb-4">
-            <h1 class="text-2xl font-bold text-gray-800 mb-2">🏠 家族在宅管理</h1>
-            <p class="text-gray-600 text-sm">WiFi接続で家族の在宅状況を共有</p>
-            <div id="status" class="mt-2 text-xs text-gray-500">接続中...</div>
-        </div>
 
-        <!-- タブ切り替え -->
-        <div class="flex gap-2 mb-4">
-            <button onclick="showView('status')" id="statusTab" class="flex-1 py-3 rounded-lg font-semibold transition bg-blue-500 text-white shadow-lg">
-                在宅状況
-            </button>
-            <button onclick="showView('settings')" id="settingsTab" class="flex-1 py-3 rounded-lg font-semibold transition bg-white text-gray-600 hover:bg-gray-50">
-                ⚙️ 設定
-            </button>
-        </div>
+<body>
+<h1>🏠 家族在宅管理</h1>
 
-        <!-- 在宅状況ビュー -->
-        <div id="statusView" class="bg-white rounded-xl shadow-lg p-6">
-            <div id="statusContent"></div>
-        </div>
+<div id="status" class="card">接続中…</div>
 
-        <!-- 設定ビュー -->
-        <div id="settingsView" class="bg-white rounded-xl shadow-lg p-6 hidden">
-            <!-- 情報 -->
-            <div class="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 mb-6">
-                <h4 class="font-semibold text-blue-900 mb-1">データ共有について</h4>
-                <p class="text-sm text-blue-800">このアプリでは家族全員でデータを共有しています。</p>
-                <p class="text-xs text-blue-700 mt-2" id="userId"></p>
-            </div>
+<div class="card">
+<h3>🏠 家の登録（IPで自動判定）</h3>
+<input id="homeName" placeholder="例：自宅">
+<button onclick="addHome()">この場所を家として登録</button>
+<p id="ipInfo"></p>
+</div>
 
-            <!-- 家の設定 -->
-            <div class="mb-6">
-                <h3 class="text-lg font-bold mb-4">🏠 家の設定</h3>
-                <div class="space-y-3 mb-4">
-                    <input type="text" id="newHomeName" placeholder="家の名前（例：実家、自宅）" class="w-full px-3 py-2 border rounded-lg">
-                    <input type="text" id="newWifiName" placeholder="WiFi名" class="w-full px-3 py-2 border rounded-lg">
-                    <button onclick="addHome()" class="w-full bg-blue-500 text-white py-2 rounded-lg font-semibold hover:bg-blue-600">
-                        ➕ 家を追加
-                    </button>
-                </div>
-                <div id="homesList" class="space-y-3"></div>
-            </div>
+<div class="card">
+<h3>👤 自分の名前</h3>
+<input id="myName" placeholder="あなたの名前">
+<button onclick="saveName()">保存</button>
+</div>
 
-            <!-- 家族メンバーの設定 -->
-            <div>
-                <h3 class="text-lg font-bold mb-4">👥 家族メンバー</h3>
-                <div class="space-y-3 mb-4">
-                    <input type="text" id="newMemberName" placeholder="あなたの名前" class="w-full px-3 py-2 border rounded-lg">
-                    <button onclick="addMember()" class="w-full bg-green-500 text-white py-2 rounded-lg font-semibold hover:bg-green-600">
-                        ➕ 自分を追加
-                    </button>
-                    <p class="text-xs text-gray-500">※各家族メンバーが自分のデバイスで自分を追加してください</p>
-                </div>
-                <div id="membersList" class="space-y-3"></div>
-            </div>
-        </div>
-    </div>
+<div class="card">
+<h3>📡 現在の状態</h3>
+<p id="myState"></p>
+</div>
 
-    <!-- Firebase SDK -->
-    <script type="module">
-        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getDatabase, ref, set, onValue, remove, push } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+<div class="card">
+<h3>👨‍👩‍👧 家族の在宅状況</h3>
+<div id="members"></div>
+</div>
 
-        // Firebase設定
-        const firebaseConfig = {
-            apiKey: "AIzaSyAhwHln5UO8x9hg0qeyk2TfeB_mhZROD90",
-            authDomain: "home-79d04.firebaseapp.com",
-            databaseURL: "https://home-79d04-default-rtdb.asia-southeast1.firebasedatabase.app",
-            projectId: "home-79d04",
-            storageBucket: "home-79d04.firebasestorage.app",
-            messagingSenderId: "86113064448",
-            appId: "1:86113064448:web:0b5ab0f2cf6a1c9f6eaae5",
-            measurementId: "G-GJY4JTBX1N"
-        };
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getDatabase, ref, set, push, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-        // Firebase初期化
-        const app = initializeApp(firebaseConfig);
-        const db = getDatabase(app);
+const firebaseConfig = {
+  apiKey: "AIzaSyAhwHln5UO8x9hg0qeyk2TfeB_mhZROD90",
+  authDomain: "home-79d04.firebaseapp.com",
+  databaseURL: "https://home-79d04-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "home-79d04",
+  storageBucket: "home-79d04.appspot.com",
+  messagingSenderId: "86113064448",
+  appId: "1:86113064448:web:0b5ab0f2cf6a1c9f6eaae5"
+};
 
-        const FAMILY_KEY = "pukumaru290";
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
 
+const FAMILY_KEY = "pukumaru290";
+const userId = localStorage.getItem("uid") || "u" + Date.now();
+localStorage.setItem("uid", userId);
 
-        // グローバル変数
-        window.homes = [];
-        window.members = [];
-        window.currentUserId = localStorage.getItem('userId') || 'user-' + Date.now();
-        localStorage.setItem('userId', window.currentUserId);
+let myIP = "";
+let homes = [];
+let members = [];
 
-        document.getElementById('status').textContent = '✅ Firebaseに接続しました';
-        document.getElementById('userId').textContent = 'あなたのID: ' + window.currentUserId.slice(0, 20) + '...';
+async function getIP(){
+  const r = await fetch("https://api.ipify.org?format=json");
+  const j = await r.json();
+  return j.ip;
+}
 
-        // データの監視
-        onValue(ref(db, 'homes'), (snapshot) => {
-            window.homes = [];
-            if (snapshot.exists()) {
-                snapshot.forEach((child) => {
-                    window.homes.push({ id: child.key, ...child.val() });
-                });
-            }
-            renderAll();
-        });
+myIP = await getIP();
+document.getElementById("ipInfo").textContent = "あなたのIP: " + myIP;
 
-        onValue(ref(db, 'members'), (snapshot) => {
-            window.members = [];
-            if (snapshot.exists()) {
-                snapshot.forEach((child) => {
-                    window.members.push({ id: child.key, ...child.val() });
-                });
-            }
-            renderAll();
-        });
+onValue(ref(db,"homes"), snap=>{
+  homes = [];
+  snap.forEach(c=> homes.push({id:c.key,...c.val()}));
+  detect();
+});
 
-        // 家を追加
-        window.addHome = function() {
-            const name = document.getElementById('newHomeName').value;
-            const wifi = document.getElementById('newWifiName').value;
-            if (!name || !wifi) return alert('家の名前とWiFi名を入力してください');
+onValue(ref(db,"members"), snap=>{
+  members = [];
+  snap.forEach(c=> members.push({id:c.key,...c.val()}));
+  render();
+});
 
-            const newHomeRef = push(ref(db, 'homes'));
-            set(newHomeRef, {
-                familyKey: FAMILY_KEY,
-                name: name,
-                wifiNames: [wifi],
-                image: null
-            });
+window.addHome = function(){
+  const name = homeName.value;
+  if(!name) return alert("家の名前を入力");
+  push(ref(db,"homes"),{
+    familyKey:FAMILY_KEY,
+    name,
+    ipList:[myIP]
+  });
+}
 
+window.saveName = function(){
+  const name = myName.value;
+  localStorage.setItem("name",name);
+  detect();
+}
 
-            document.getElementById('newHomeName').value = '';
-            document.getElementById('newWifiName').value = '';
-        };
+function detect(){
+  let home=null;
+  for(const h of homes){
+    if(h.ipList?.includes(myIP)) home=h;
+  }
 
-        // メンバーを追加
-        window.addMember = function() {
-            const name = document.getElementById('newMemberName').value;
-            if (!name) return alert('名前を入力してください');
+  const status = home ? "home":"out";
+  const name = localStorage.getItem("name") || "未設定";
 
-            const newMemberRef = push(ref(db, 'members'));
-            set(newMemberRef, {
-                familyKey: FAMILY_KEY,
-                name: name,
-                currentWifi: '',
-                image: null,
-                userId: window.currentUserId,
-                lastUpdate: new Date().toISOString()
-            });
+  set(ref(db,"members/"+userId),{
+    familyKey:FAMILY_KEY,
+    name,
+    status,
+    home: home ? home.name : "",
+    ip: myIP,
+    last:Date.now()
+  });
 
+  myState.textContent = home ? "🏠 在宅中":"🚶 外出中";
+}
 
-            document.getElementById('newMemberName').value = '';
-        };
-
-        // 家を削除
-        window.deleteHome = function(homeId) {
-            if (confirm('この家を削除しますか？')) {
-                remove(ref(db, 'homes/' + homeId));
-            }
-        };
-
-        // メンバーを削除
-        window.deleteMember = function(memberId, userId) {
-            if (userId !== window.currentUserId) return alert('自分のメンバーのみ削除できます');
-            if (confirm('このメンバーを削除しますか？')) {
-                remove(ref(db, 'members/' + memberId));
-            }
-        };
-
-        // WiFi更新
-        window.updateWifi = function(memberId, userId) {
-            if (userId !== window.currentUserId) return alert('自分のメンバーのみ更新できます');
-            const wifi = prompt('接続中のWiFi名を入力してください:');
-            if (wifi !== null) {
-                set(ref(db, 'members/' + memberId + '/currentWifi'), wifi);
-                set(ref(db, 'members/' + memberId + '/lastUpdate'), new Date().toISOString());
-            }
-        };
-
-        // WiFiをクリア
-        window.clearWifi = function(memberId, userId) {
-            if (userId !== window.currentUserId) return;
-            set(ref(db, 'members/' + memberId + '/currentWifi'), '');
-        };
-
-        // WiFiを追加
-        window.addWifi = function(homeId) {
-            const wifi = prompt('WiFi名を入力してください:');
-            if (!wifi) return;
-            
-            const home = window.homes.find(h => h.id === homeId);
-            if (home) {
-                const wifiNames = [...(home.wifiNames || []), wifi];
-                set(ref(db, 'homes/' + homeId + '/wifiNames'), wifiNames);
-            }
-        };
-
-        // WiFiを削除
-        window.deleteWifi = function(homeId, wifiName) {
-            const home = window.homes.find(h => h.id === homeId);
-            if (home && confirm('このWiFiを削除しますか？')) {
-                const wifiNames = home.wifiNames.filter(w => w !== wifiName);
-                set(ref(db, 'homes/' + homeId + '/wifiNames'), wifiNames);
-            }
-        };
-
-        // 画像アップロード
-        window.uploadHomeImage = function(homeId) {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = 'image/*';
-            input.onchange = (e) => {
-                const file = e.target.files[0];
-                if (file.size > 500000) return alert('画像サイズは500KB以下にしてください');
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    set(ref(db, 'homes/' + homeId + '/image'), reader.result);
-                };
-                reader.readAsDataURL(file);
-            };
-            input.click();
-        };
-
-        window.uploadMemberImage = function(memberId, userId) {
-            if (userId !== window.currentUserId) return alert('自分のメンバーのみ変更できます');
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = 'image/*';
-            input.onchange = (e) => {
-                const file = e.target.files[0];
-                if (file.size > 500000) return alert('画像サイズは500KB以下にしてください');
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    set(ref(db, 'members/' + memberId + '/image'), reader.result);
-                };
-                reader.readAsDataURL(file);
-            };
-            input.click();
-        };
-
-        // 位置判定
-        function getMemberLocation(member) {
-            if (!member.currentWifi) return null;
-            return window.homes.find(home => (home.wifiNames || []).includes(member.currentWifi));
-        }
-
-        // ビュー切り替え
-        window.showView = function(view) {
-            if (view === 'status') {
-                document.getElementById('statusView').classList.remove('hidden');
-                document.getElementById('settingsView').classList.add('hidden');
-                document.getElementById('statusTab').className = 'flex-1 py-3 rounded-lg font-semibold transition bg-blue-500 text-white shadow-lg';
-                document.getElementById('settingsTab').className = 'flex-1 py-3 rounded-lg font-semibold transition bg-white text-gray-600 hover:bg-gray-50';
-            } else {
-                document.getElementById('statusView').classList.add('hidden');
-                document.getElementById('settingsView').classList.remove('hidden');
-                document.getElementById('statusTab').className = 'flex-1 py-3 rounded-lg font-semibold transition bg-white text-gray-600 hover:bg-gray-50';
-                document.getElementById('settingsTab').className = 'flex-1 py-3 rounded-lg font-semibold transition bg-blue-500 text-white shadow-lg';
-            }
-        };
-
-        // レンダリング
-        function renderAll() {
-            renderStatus();
-            renderHomes();
-            renderMembers();
-        }
-
-        function renderStatus() {
-            const content = document.getElementById('statusContent');
-            let html = '<div class="space-y-4"><div class="grid grid-cols-1 sm:grid-cols-2 gap-4">';
-
-            // 各家
-            window.homes.forEach(home => {
-                const membersAtHome = window.members.filter(m => {
-                    const loc = getMemberLocation(m);
-                    return loc && loc.id === home.id;
-                });
-
-                html += `
-                <div class="bg-gradient-to-br from-green-50 to-green-100 p-6 rounded-2xl border-2 border-green-200 shadow-lg">
-                    <div class="text-center mb-4">
-                        <div class="w-20 h-20 bg-green-500 rounded-2xl mx-auto mb-3 flex items-center justify-center overflow-hidden border-4 border-white shadow-lg">
-                            ${home.image ? `<img src="${home.image}" alt="${home.name}" class="w-full h-full object-cover">` : '🏠'}
-                        </div>
-                        <h3 class="text-lg font-bold text-gray-800">${home.name}</h3>
-                        <div class="text-sm font-semibold text-green-700 mt-1">${membersAtHome.length}人在宅</div>
-                    </div>
-                    <div class="flex flex-wrap gap-3 justify-center min-h-[80px]">
-                        ${membersAtHome.map(m => `
-                            <div class="flex flex-col items-center">
-                                <div class="relative">
-                                    <div class="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-md border-2 border-green-300 overflow-hidden">
-                                        ${m.image ? `<img src="${m.image}" alt="${m.name}" class="w-full h-full object-cover">` : `<span class="font-bold text-gray-700 text-lg">${m.name[0]}</span>`}
-                                    </div>
-                                    ${m.userId === window.currentUserId ? '<div class="absolute -top-1 -right-1 w-5 h-5 bg-blue-500 rounded-full border-2 border-white flex items-center justify-center"><span class="text-white text-xs">✓</span></div>' : ''}
-                                </div>
-                                <div class="text-xs font-medium text-gray-700 mt-1 max-w-[60px] truncate">${m.name}</div>
-                            </div>
-                        `).join('') || '<div class="text-gray-500 text-sm flex items-center justify-center w-full py-4">空き家</div>'}
-                    </div>
-                </div>
-                `;
-            });
-
-            html += '</div>';
-
-            // 外出中
-            const awayMembers = window.members.filter(m => m.currentWifi && !getMemberLocation(m));
-            html += `
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div class="bg-gradient-to-br from-yellow-50 to-yellow-100 p-6 rounded-2xl border-2 border-yellow-200 shadow-lg">
-                    <div class="text-center mb-4">
-                        <div class="w-20 h-20 bg-yellow-500 rounded-2xl mx-auto mb-3 flex items-center justify-center border-4 border-white shadow-lg">📡</div>
-                        <h3 class="text-lg font-bold text-gray-800">外出中</h3>
-                    </div>
-                    <div class="flex flex-wrap gap-3 justify-center min-h-[80px]">
-                        ${awayMembers.map(m => `
-                            <div class="flex flex-col items-center">
-                                <div class="relative">
-                                    <div class="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-md border-2 border-yellow-300 overflow-hidden">
-                                        ${m.image ? `<img src="${m.image}" alt="${m.name}" class="w-full h-full object-cover">` : `<span class="font-bold text-gray-700 text-lg">${m.name[0]}</span>`}
-                                    </div>
-                                    ${m.userId === window.currentUserId ? '<div class="absolute -top-1 -right-1 w-5 h-5 bg-blue-500 rounded-full border-2 border-white flex items-center justify-center"><span class="text-white text-xs">✓</span></div>' : ''}
-                                </div>
-                                <div class="text-xs font-medium text-gray-700 mt-1 max-w-[60px] truncate">${m.name}</div>
-                            </div>
-                        `).join('') || '<div class="text-gray-500 text-sm flex items-center justify-center w-full py-4">該当なし</div>'}
-                    </div>
-                </div>
-            `;
-
-            // オフライン
-            const offlineMembers = window.members.filter(m => !m.currentWifi);
-            html += `
-                <div class="bg-gradient-to-br from-gray-50 to-gray-100 p-6 rounded-2xl border-2 border-gray-200 shadow-lg">
-                    <div class="text-center mb-4">
-                        <div class="w-20 h-20 bg-gray-400 rounded-2xl mx-auto mb-3 flex items-center justify-center border-4 border-white shadow-lg">👥</div>
-                        <h3 class="text-lg font-bold text-gray-800">オフライン</h3>
-                    </div>
-                    <div class="flex flex-wrap gap-3 justify-center min-h-[80px]">
-                        ${offlineMembers.map(m => `
-                            <div class="flex flex-col items-center">
-                                <div class="relative">
-                                    <div class="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-md border-2 border-gray-300 overflow-hidden">
-                                        ${m.image ? `<img src="${m.image}" alt="${m.name}" class="w-full h-full object-cover grayscale opacity-60">` : `<span class="font-bold text-gray-500 text-lg">${m.name[0]}</span>`}
-                                    </div>
-                                    ${m.userId === window.currentUserId ? '<div class="absolute -top-1 -right-1 w-5 h-5 bg-blue-500 rounded-full border-2 border-white flex items-center justify-center"><span class="text-white text-xs">✓</span></div>' : ''}
-                                </div>
-                                <div class="text-xs font-medium text-gray-600 mt-1 max-w-[60px] truncate">${m.name}</div>
-                            </div>
-                        `).join('') || '<div class="text-gray-500 text-sm flex items-center justify-center w-full py-4">該当なし</div>'}
-                    </div>
-                </div>
-            </div></div>`;
-
-            content.innerHTML = html;
-        }
-
-        function renderHomes() {
-            const list = document.getElementById('homesList');
-            list.innerHTML = window.homes.map(home => `
-                <div class="p-3 border rounded-lg bg-gray-50">
-                    <div class="flex items-center gap-3 mb-3">
-                        <div class="w-16 h-16 bg-green-100 rounded-lg flex items-center justify-center overflow-hidden border-2 border-green-200 flex-shrink-0">
-                            ${home.image ? `<img src="${home.image}" class="w-full h-full object-cover">` : '🏠'}
-                        </div>
-                        <div class="flex-1">
-                            <span class="font-semibold block">${home.name}</span>
-                            <button onclick="uploadHomeImage('${home.id}')" class="text-xs text-blue-600 hover:underline">📷 画像を変更</button>
-                        </div>
-                        <button onclick="deleteHome('${home.id}')" class="text-red-500 hover:text-red-700">❌</button>
-                    </div>
-                    <div class="space-y-1 mb-2">
-                        <div class="text-xs text-gray-600 font-medium">登録WiFi:</div>
-                        ${(home.wifiNames || []).map(w => `
-                            <div class="flex items-center justify-between text-sm bg-white px-2 py-1 rounded">
-                                <span>${w}</span>
-                                <button onclick="deleteWifi('${home.id}', '${w}')" class="text-red-400 hover:text-red-600">❌</button>
-                            </div>
-                        `).join('')}
-                    </div>
-                    <button onclick="addWifi('${home.id}')" class="text-sm text-blue-500 hover:text-blue-700">+ WiFiを追加</button>
-                </div>
-            `).join('');
-        }
-
-        function renderMembers() {
-            const list = document.getElementById('membersList');
-            list.innerHTML = window.members.map(member => {
-                const isOwn = member.userId === window.currentUserId;
-                const location = getMemberLocation(member);
-                return `
-                <div class="p-3 border rounded-lg bg-gray-50">
-                    <div class="flex items-center gap-3 mb-3">
-                        <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center overflow-hidden border-2 border-blue-200 flex-shrink-0">
-                            ${member.image ? `<img src="${member.image}" class="w-full h-full object-cover">` : `<span class="font-bold text-blue-600 text-xl">${member.name[0]}</span>`}
-                        </div>
-                        <div class="flex-1">
-                            <div>
-                                <span class="font-semibold">${member.name}</span>
-                                ${isOwn ? '<span class="ml-2 text-xs bg-blue-500 text-white px-2 py-1 rounded">自分</span>' : ''}
-                            </div>
-                            ${isOwn ? `<button onclick="uploadMemberImage('${member.id}', '${member.userId}')" class="text-xs text-blue-600 hover:underline">📷 画像を変更</button>` : ''}
-                        </div>
-                        ${isOwn ? `<button onclick="deleteMember('${member.id}', '${member.userId}')" class="text-red-500 hover:text-red-700">❌</button>` : ''}
-                    </div>
-                    ${isOwn ? `
-                        <div class="space-y-2">
-                            <div class="text-xs text-gray-600 font-medium">接続WiFi（テスト用）:</div>
-                            <div class="flex gap-2">
-                                <button onclick="updateWifi('${member.id}', '${member.userId}')" class="flex-1 bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600">
-                                    WiFi設定
-                                </button>
-                                ${member.currentWifi ? `<button onclick="clearWifi('${member.id}', '${member.userId}')" class="bg-gray-300 text-gray-700 px-3 py-1 rounded text-sm hover:bg-gray-400">クリア</button>` : ''}
-                            </div>
-                            ${member.currentWifi ? `<div class="text-xs text-gray-500 bg-white px-2 py-1 rounded">📍 ${location ? location.name + 'にいます' : '登録されていない場所'}</div>` : ''}
-                        </div>
-                    ` : '<div class="text-xs text-gray-500">別のデバイスで管理されています</div>'}
-                </div>
-            `}).join('');
-        }
-    </script>
+function render(){
+  membersDiv.innerHTML="";
+  members.forEach(m=>{
+    if(m.familyKey!==FAMILY_KEY) return;
+    const d=document.createElement("div");
+    d.className="member";
+    d.innerHTML=`<span>${m.name}</span><span class="${m.status}">${m.status==="home"?"🏠 在宅":"外出"}</span>`;
+    membersDiv.appendChild(d);
+  });
+  status.textContent="Firebase接続OK";
+}
+</script>
 </body>
 </html>
