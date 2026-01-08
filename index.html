@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>🏠 Family Home Tracker</title>
+<title>🏠 家族在宅管理</title>
 <style>
 body { font-family: system-ui; background:#f3f4f6; margin:0; padding:20px;}
 h1 { text-align:center; }
@@ -14,8 +14,8 @@ input,button { padding:8px; border-radius:8px; border:1px solid #ccc;}
 button { background:#2563eb; color:white; border:none; cursor:pointer;}
 </style>
 </head>
-
 <body>
+
 <h1>🏠 家族在宅管理</h1>
 
 <div id="status" class="card">接続中…</div>
@@ -47,6 +47,8 @@ button { background:#2563eb; color:white; border:none; cursor:pointer;}
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
 <script>
+const FAMILY_KEY = "pukumaru290";
+
 const firebaseConfig = {
   apiKey: "AIzaSyAhwHln5UO8x9hg0qeyk2TfeB_mhZROD90",
   authDomain: "home-79d04.firebaseapp.com",
@@ -59,6 +61,96 @@ const firebaseConfig = {
 
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
+
+const userId = localStorage.getItem("uid") || "u" + Date.now();
+localStorage.setItem("uid", userId);
+
+let myIP = "";
+let homes = [];
+let members = [];
+
+async function getIP(){
+  const r = await fetch("https://api.ipify.org?format=json");
+  const j = await r.json();
+  return j.ip;
+}
+
+getIP().then(ip=>{
+  myIP = ip;
+  document.getElementById("ipInfo").textContent = "あなたのIP: " + ip;
+  detect();
+});
+
+db.ref("homes").on("value", snap=>{
+  homes=[];
+  snap.forEach(c=>homes.push({id:c.key,...c.val()}));
+  detect();
+});
+
+db.ref("members").on("value", snap=>{
+  members=[];
+  snap.forEach(c=>members.push({id:c.key,...c.val()}));
+  render();
+});
+
+function findMyHome(){
+  for(const h of homes){
+    if(h.ipList && h.ipList.includes(myIP)){
+      return h;
+    }
+  }
+  return null;
+}
+
+function detect(){
+  if(!myIP) return;
+
+  const home = findMyHome();
+  const name = localStorage.getItem("name") || "未設定";
+  const status = home ? "home":"out";
+
+  db.ref("members/"+userId).set({
+    familyKey:FAMILY_KEY,
+    name,
+    status,
+    home: home ? home.name:"",
+    ip: myIP,
+    last: Date.now()
+  });
+
+  document.getElementById("myState").textContent =
+    home ? "🏠 "+home.name+" に在宅中":"🚶 外出中";
+
+  document.getElementById("status").textContent = "Firebase接続OK";
+}
+
+function render(){
+  const box=document.getElementById("members");
+  box.innerHTML="";
+  members.forEach(m=>{
+    if(m.familyKey!==FAMILY_KEY) return;
+    const d=document.createElement("div");
+    d.className="member";
+    d.innerHTML=`<span>${m.name}</span><span class="${m.status}">${m.status==="home"?"🏠 在宅":"外出"}</span>`;
+    box.appendChild(d);
+  });
+}
+
+window.addHome=function(){
+  const name=document.getElementById("homeName").value;
+  if(!name) return alert("家の名前を入力");
+  db.ref("homes").push({
+    familyKey:FAMILY_KEY,
+    name,
+    ipList:[myIP]
+  });
+};
+
+window.saveName=function(){
+  const name=document.getElementById("myName").value;
+  localStorage.setItem("name",name);
+  detect();
+};
 </script>
 </body>
 </html>
