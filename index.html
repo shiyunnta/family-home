@@ -23,7 +23,7 @@ button { background:#2563eb; color:white; border:none; cursor:pointer;}
 <div class="card">
 <h3>🏠 家の登録（IPで自動判定）</h3>
 <input id="homeName" placeholder="例：自宅">
-<button onclick="addHome()">この場所を家として登録</button>
+<button onclick="addHome()">登録</button>
 <p id="ipInfo"></p>
 </div>
 
@@ -43,10 +43,10 @@ button { background:#2563eb; color:white; border:none; cursor:pointer;}
 <div id="members"></div>
 </div>
 
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getDatabase, ref, set, push, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
+<script>
 const firebaseConfig = {
   apiKey: "AIzaSyAhwHln5UO8x9hg0qeyk2TfeB_mhZROD90",
   authDomain: "home-79d04.firebaseapp.com",
@@ -57,86 +57,8 @@ const firebaseConfig = {
   appId: "1:86113064448:web:0b5ab0f2cf6a1c9f6eaae5"
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
-
-const FAMILY_KEY = "pukumaru290";
-const userId = localStorage.getItem("uid") || "u" + Date.now();
-localStorage.setItem("uid", userId);
-
-let myIP = "";
-let homes = [];
-let members = [];
-
-async function getIP(){
-  const r = await fetch("https://api.ipify.org?format=json");
-  const j = await r.json();
-  return j.ip;
-}
-
-myIP = await getIP();
-document.getElementById("ipInfo").textContent = "あなたのIP: " + myIP;
-
-onValue(ref(db,"homes"), snap=>{
-  homes = [];
-  snap.forEach(c=> homes.push({id:c.key,...c.val()}));
-  detect();
-});
-
-onValue(ref(db,"members"), snap=>{
-  members = [];
-  snap.forEach(c=> members.push({id:c.key,...c.val()}));
-  render();
-});
-
-window.addHome = function(){
-  const name = homeName.value;
-  if(!name) return alert("家の名前を入力");
-  push(ref(db,"homes"),{
-    familyKey:FAMILY_KEY,
-    name,
-    ipList:[myIP]
-  });
-}
-
-window.saveName = function(){
-  const name = myName.value;
-  localStorage.setItem("name",name);
-  detect();
-}
-
-function detect(){
-  let home=null;
-  for(const h of homes){
-    if(h.ipList?.includes(myIP)) home=h;
-  }
-
-  const status = home ? "home":"out";
-  const name = localStorage.getItem("name") || "未設定";
-
-  set(ref(db,"members/"+userId),{
-    familyKey:FAMILY_KEY,
-    name,
-    status,
-    home: home ? home.name : "",
-    ip: myIP,
-    last:Date.now()
-  });
-
-  myState.textContent = home ? "🏠 在宅中":"🚶 外出中";
-}
-
-function render(){
-  membersDiv.innerHTML="";
-  members.forEach(m=>{
-    if(m.familyKey!==FAMILY_KEY) return;
-    const d=document.createElement("div");
-    d.className="member";
-    d.innerHTML=`<span>${m.name}</span><span class="${m.status}">${m.status==="home"?"🏠 在宅":"外出"}</span>`;
-    membersDiv.appendChild(d);
-  });
-  status.textContent="Firebase接続OK";
-}
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
 </script>
 </body>
 </html>
